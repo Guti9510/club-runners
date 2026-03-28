@@ -212,7 +212,7 @@ export default function ClubHub() {
                     <LabelList
                       dataKey="runs"
                       position="top"
-                      formatter={(val: number) => val > 0 ? `${val}` : ''}
+                      formatter={(val: any) => val > 0 ? `${val}` : ''}
                       style={{ fill: '#94a3b8', fontSize: '11px', fontWeight: '600' }}
                     />
                   </Bar>

@@ -181,7 +181,7 @@ export default function Dashboard() {
                     <LabelList
                       dataKey="distance"
                       position="top"
-                      formatter={(val: number) => val > 0 ? `${val.toFixed(1)}` : ''}
+                      formatter={(val: any) => val > 0 ? `${Number(val).toFixed(1)}` : ''}
                       style={{ fill: '#94a3b8', fontSize: '10px', fontWeight: '600' }}
                     />
                   </Bar>
@@ -263,8 +263,8 @@ export default function Dashboard() {
                     cy="45%"
                     outerRadius={70}
                     innerRadius={35}
-                    label={({ name, percent }) =>
-                      percent > 0.05 ? `${(percent * 100).toFixed(0)}%` : ''
+                    label={({ percent }: { name?: string; percent?: number }) =>
+                      (percent ?? 0) > 0.05 ? `${((percent ?? 0) * 100).toFixed(0)}%` : ''
                     }
                     labelLine={false}
                   >

@@ -113,9 +113,16 @@ export default function Events() {
 
   useEffect(() => {
     if (!isTokenValid()) { clearAuth(); navigate('/'); return }
-    supabase.from('events').select('*').order('date', { ascending: true })
-      .then(({ data }) => { if (data) setEvents(data.map(fromRow)) })
-      .finally(() => setLoadingEvents(false))
+    ;(async () => {
+      try {
+        const { data } = await supabase.from('events').select('*').order('date', { ascending: true })
+        if (data) setEvents(data.map(fromRow))
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoadingEvents(false)
+      }
+    })()
   }, [])
 
   const now = new Date()
@@ -252,7 +259,7 @@ export default function Events() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {displayList.map(event => {
               const isAttending = event.attendees.some(a => a.id === athleteId)
-              const myResult = event.results.find(r => r.id === athleteId)
+              const _myResult = event.results.find(r => r.id === athleteId)
               const avgTime = event.results.filter(r => r.timeSeconds).length > 0
                 ? event.results.filter(r => r.timeSeconds).reduce((s, r) => s + (r.timeSeconds ?? 0), 0) / event.results.filter(r => r.timeSeconds).length
                 : null
