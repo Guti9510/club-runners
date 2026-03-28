@@ -259,7 +259,7 @@ export default function Events() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {displayList.map(event => {
               const isAttending = event.attendees.some(a => a.id === athleteId)
-              const _myResult = event.results.find(r => r.id === athleteId)
+
               const avgTime = event.results.filter(r => r.timeSeconds).length > 0
                 ? event.results.filter(r => r.timeSeconds).reduce((s, r) => s + (r.timeSeconds ?? 0), 0) / event.results.filter(r => r.timeSeconds).length
                 : null
