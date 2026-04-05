@@ -1,9 +1,6 @@
 import { getStravaAuthUrl } from '../lib/strava'
 
 export default function Login() {
-  const handleConnect = () => {
-    window.location.href = getStravaAuthUrl()
-  }
 
   return (
     <div style={{
@@ -77,16 +74,16 @@ export default function Login() {
           ))}
         </div>
 
-        {/* Connect Button */}
-        <button
-          onClick={handleConnect}
+        {/* Connect Button — official Strava OAuth button, 48px height per brand guidelines */}
+        <a
+          href={getStravaAuthUrl()}
           style={{
             width: '100%',
-            padding: '14px 24px',
+            height: '48px',
             background: '#FC4C02',
             color: 'white',
             border: 'none',
-            borderRadius: '12px',
+            borderRadius: '4px',
             fontSize: '1rem',
             fontWeight: '700',
             cursor: 'pointer',
@@ -94,19 +91,21 @@ export default function Login() {
             alignItems: 'center',
             justifyContent: 'center',
             gap: '10px',
-            transition: 'all 0.2s',
+            textDecoration: 'none',
+            boxSizing: 'border-box',
           }}
-          onMouseOver={e => (e.currentTarget.style.background = '#e04400')}
-          onMouseOut={e => (e.currentTarget.style.background = '#FC4C02')}
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
             <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169"/>
           </svg>
           Connect with Strava
-        </button>
+        </a>
 
         <p style={{ color: '#64748b', marginTop: '16px', fontSize: '0.8rem' }}>
           We only read your activity data. We never post on your behalf.
+        </p>
+        <p style={{ color: '#64748b', marginTop: '8px', fontSize: '0.75rem' }}>
+          Compatible with Strava
         </p>
       </div>
     </div>

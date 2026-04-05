@@ -393,7 +393,7 @@ export default function Dashboard() {
                   key={activity.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: '1fr 120px 100px 130px',
+                    gridTemplateColumns: '1fr 120px 100px 130px 110px',
                     alignItems: 'center',
                     gap: '16px',
                     padding: '12px 0',
@@ -419,6 +419,16 @@ export default function Dashboard() {
                   <div>
                     <div style={{ fontWeight: '700', color: '#f59e0b', fontSize: '0.9rem' }}>{formatPace(activity.average_speed)}</div>
                     <div style={{ color: '#64748b', fontSize: '0.75rem' }}>Pace</div>
+                  </div>
+                  <div>
+                    <a
+                      href={`https://www.strava.com/activities/${activity.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#FC5200', fontWeight: '700', fontSize: '0.78rem', textDecoration: 'none' }}
+                    >
+                      View on Strava
+                    </a>
                   </div>
                 </div>
               ))}
