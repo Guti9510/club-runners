@@ -8,6 +8,7 @@ const navItems = [
   { path: '/map', label: 'World Map', icon: '🗺️' },
   { path: '/challenges', label: 'Challenges', icon: '🎯' },
   { path: '/recap', label: 'Weekly Recap', icon: '📅' },
+  { path: '/chat', label: 'Ask AI', icon: '🤖' },
 ]
 
 export default function Nav() {

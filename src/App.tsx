@@ -10,6 +10,7 @@ import ClubMap from './pages/ClubMap'
 import Challenges from './pages/Challenges'
 import WeeklyRecap from './pages/WeeklyRecap'
 import Events from './pages/Events'
+import Chat from './pages/Chat'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!isTokenValid()) {
@@ -50,6 +51,7 @@ function App() {
           <Route path="/challenges" element={<Challenges />} />
           <Route path="/recap" element={<WeeklyRecap />} />
           <Route path="/events" element={<Events />} />
+          <Route path="/chat" element={<Chat />} />
         </Route>
       </Routes>
     </BrowserRouter>
