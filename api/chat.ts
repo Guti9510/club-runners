@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 
 export default async function handler(req: any, res: any) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY is not set in environment variables' })
+  }
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
