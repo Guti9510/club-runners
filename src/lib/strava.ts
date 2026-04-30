@@ -194,6 +194,7 @@ export interface PaceZone {
   name: string
   count: number
   color: string
+  avgPace: string
 }
 
 // thresholdPace is in min/km (e.g. 5.0 = 5:00/km)
@@ -205,16 +206,23 @@ export const getPaceZones = (activities: any[], thresholdPace?: number): PaceZon
   const hard = thresholdPace ? thresholdPace : 5.5
   const easy = thresholdPace ? thresholdPace + 1.0 : 6.5
 
-  const zones = { easy: 0, moderate: 0, hard: 0 }
+  const zones = {
+    easy:     { count: 0, totalPace: 0 },
+    moderate: { count: 0, totalPace: 0 },
+    hard:     { count: 0, totalPace: 0 },
+  }
 
   runs.forEach(activity => {
     const paceMinPerKm = 1000 / (activity.average_speed * 60)
     if (paceMinPerKm < hard) {
-      zones.hard += 1
+      zones.hard.count += 1
+      zones.hard.totalPace += paceMinPerKm
     } else if (paceMinPerKm <= easy) {
-      zones.moderate += 1
+      zones.moderate.count += 1
+      zones.moderate.totalPace += paceMinPerKm
     } else {
-      zones.easy += 1
+      zones.easy.count += 1
+      zones.easy.totalPace += paceMinPerKm
     }
   })
 
@@ -224,10 +232,13 @@ export const getPaceZones = (activities: any[], thresholdPace?: number): PaceZon
     return `${min}:${sec}`
   }
 
+  const avgPaceFmt = (z: { count: number; totalPace: number }) =>
+    z.count > 0 ? `${fmt(z.totalPace / z.count)}/km` : '-'
+
   return [
-    { name: `Easy (>${fmt(easy)}/km)`, count: zones.easy, color: '#10b981' },
-    { name: `Moderate (${fmt(hard)}-${fmt(easy)}/km)`, count: zones.moderate, color: '#f59e0b' },
-    { name: `Hard (<${fmt(hard)}/km)`, count: zones.hard, color: '#ef4444' },
+    { name: `Easy (>${fmt(easy)}/km)`, count: zones.easy.count, color: '#10b981', avgPace: avgPaceFmt(zones.easy) },
+    { name: `Moderate (${fmt(hard)}-${fmt(easy)}/km)`, count: zones.moderate.count, color: '#f59e0b', avgPace: avgPaceFmt(zones.moderate) },
+    { name: `Hard (<${fmt(hard)}/km)`, count: zones.hard.count, color: '#ef4444', avgPace: avgPaceFmt(zones.hard) },
   ].filter(z => z.count > 0)
 }
 

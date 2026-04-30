@@ -253,36 +253,54 @@ export default function Dashboard() {
                 No run data yet
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
-                <PieChart>
-                  <Pie
-                    data={paceZones}
-                    dataKey="count"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={70}
-                    innerRadius={35}
-                    label={({ percent }: { name?: string; percent?: number }) =>
-                      (percent ?? 0) > 0.05 ? `${((percent ?? 0) * 100).toFixed(0)}%` : ''
-                    }
-                    labelLine={false}
-                  >
-                    {paceZones.map((zone, idx) => (
-                      <Cell key={idx} fill={zone.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: 'white' }}
-                    formatter={(val: any) => [`${val} runs`, '']}
-                  />
-                  <Legend
-                    wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }}
-                    iconType="circle"
-                    iconSize={8}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <ResponsiveContainer width="100%" height={240}>
+                    <PieChart>
+                      <Pie
+                        data={paceZones}
+                        dataKey="count"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        outerRadius={70}
+                        innerRadius={35}
+                        label={({ percent }: { name?: string; percent?: number }) =>
+                          (percent ?? 0) > 0.05 ? `${((percent ?? 0) * 100).toFixed(0)}%` : ''
+                        }
+                        labelLine={false}
+                      >
+                        {paceZones.map((zone, idx) => (
+                          <Cell key={idx} fill={zone.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', color: 'white' }}
+                        formatter={(val: any) => [`${val} runs`, '']}
+                      />
+                      <Legend
+                        wrapperStyle={{ fontSize: '11px', color: '#94a3b8' }}
+                        iconType="circle"
+                        iconSize={8}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', minWidth: '140px' }}>
+                  <div style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Avg Pace</div>
+                  {paceZones.map((zone, idx) => (
+                    <div key={idx} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: zone.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{zone.name.split(' ')[0]}</span>
+                      </div>
+                      <div style={{ fontSize: '1rem', fontWeight: '700', color: zone.color, paddingLeft: '14px' }}>
+                        {zone.avgPace}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
