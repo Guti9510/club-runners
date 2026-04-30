@@ -78,7 +78,7 @@ export default function WeeklyRecap() {
   const tw = recap.thisWeek
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0f172a', fontFamily: "'Inter', sans-serif", color: 'white' }}>
+    <div style={{ minHeight: '100vh',  fontFamily: "'Inter', sans-serif", color: 'white' }}>
       <div style={{ padding: '32px', maxWidth: '700px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{ marginBottom: '28px' }}>

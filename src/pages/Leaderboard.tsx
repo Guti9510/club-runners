@@ -77,7 +77,7 @@ export default function ClubHub() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: '#0f172a', fontFamily: "'Inter', sans-serif", color: 'white' }}>
+    <div style={{ minHeight: '100vh',  fontFamily: "'Inter', sans-serif", color: 'white' }}>
       <div style={{ padding: '32px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {/* Header */}

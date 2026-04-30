@@ -85,7 +85,7 @@ export default function Dashboard() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: '#0f172a',
+      
       fontFamily: "'Inter', sans-serif",
       color: 'white',
     }}>
