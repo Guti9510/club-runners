@@ -253,14 +253,14 @@ export default function Dashboard() {
                 No run data yet
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie
                     data={paceZones}
                     dataKey="count"
                     nameKey="name"
                     cx="50%"
-                    cy="45%"
+                    cy="50%"
                     outerRadius={70}
                     innerRadius={35}
                     label={({ percent }: { name?: string; percent?: number }) =>
