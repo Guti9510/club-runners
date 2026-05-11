@@ -178,7 +178,8 @@ export const getWeeklyStats = (activities: any[]): WeeklyStats[] => {
   }
 
   runs.forEach(activity => {
-    const date = new Date(activity.start_date_local)
+    // Strip Z suffix so JS treats start_date_local as local time, not UTC
+    const date = new Date(activity.start_date_local.replace('Z', ''))
     const key = getWeekKey(date)
     if (weekMap[key]) {
       weekMap[key].distance += activity.distance / 1000
