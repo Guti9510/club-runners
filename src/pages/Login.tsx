@@ -1,54 +1,34 @@
 import { getStravaAuthUrl } from '../lib/strava'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 const marathons = [
-  {
-    city: 'Boston',
-    country: 'USA',
-    photo: 'https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?w=1600&q=80&auto=format&fit=crop',
-  },
-  {
-    city: 'Tokyo',
-    country: 'Japan',
-    photo: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=1600&q=80&auto=format&fit=crop',
-  },
-  {
-    city: 'Berlin',
-    country: 'Germany',
-    photo: 'https://images.unsplash.com/photo-1587330979470-3595ac045ab0?w=1600&q=80&auto=format&fit=crop',
-  },
-  {
-    city: 'London',
-    country: 'UK',
-    photo: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1600&q=80&auto=format&fit=crop',
-  },
-  {
-    city: 'Chicago',
-    country: 'USA',
-    photo: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1600&q=80&auto=format&fit=crop',
-  },
-  {
-    city: 'New York',
-    country: 'USA',
-    photo: 'https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?w=1600&q=80&auto=format&fit=crop',
-  },
+  { city: 'Boston', country: 'USA', photo: 'https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?w=1600&q=80&auto=format&fit=crop' },
+  { city: 'Tokyo', country: 'Japan', photo: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=1600&q=80&auto=format&fit=crop' },
+  { city: 'Berlin', country: 'Germany', photo: 'https://images.unsplash.com/photo-1587330979470-3595ac045ab0?w=1600&q=80&auto=format&fit=crop' },
+  { city: 'London', country: 'UK', photo: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=1600&q=80&auto=format&fit=crop' },
+  { city: 'Chicago', country: 'USA', photo: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?w=1600&q=80&auto=format&fit=crop' },
+  { city: 'New York', country: 'USA', photo: 'https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?w=1600&q=80&auto=format&fit=crop' },
 ]
 
+const FOUR_HOURS_MS = 4 * 60 * 60 * 1000
+
+function getStoredIndex() {
+  try {
+    const saved = localStorage.getItem('marathon_bg')
+    if (saved) {
+      const { index, timestamp } = JSON.parse(saved)
+      if (Date.now() - timestamp < FOUR_HOURS_MS) return index
+      const next = (index + 1) % marathons.length
+      localStorage.setItem('marathon_bg', JSON.stringify({ index: next, timestamp: Date.now() }))
+      return next
+    }
+  } catch {}
+  localStorage.setItem('marathon_bg', JSON.stringify({ index: 0, timestamp: Date.now() }))
+  return 0
+}
+
 export default function Login() {
-  const [current, setCurrent] = useState(0)
-  const [fading, setFading] = useState(false)
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFading(true)
-      setTimeout(() => {
-        setCurrent(prev => (prev + 1) % marathons.length)
-        setFading(false)
-      }, 600)
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
+  const [current] = useState(() => getStoredIndex())
   const marathon = marathons[current]
 
   return (
@@ -80,11 +60,7 @@ export default function Login() {
       }} />
 
       {/* Marathon label */}
-      <div style={{
-        position: 'absolute', bottom: '24px', left: '24px', zIndex: 2,
-        opacity: fading ? 0 : 1,
-        transition: 'opacity 0.6s ease-in-out',
-      }}>
+      <div style={{ position: 'absolute', bottom: '24px', left: '24px', zIndex: 2 }}>
         <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '2px' }}>
           World Marathon Major
         </div>
@@ -94,19 +70,13 @@ export default function Login() {
       </div>
 
       {/* Dots indicator */}
-      <div style={{
-        position: 'absolute', bottom: '28px', right: '24px', zIndex: 2,
-        display: 'flex', gap: '6px',
-      }}>
+      <div style={{ position: 'absolute', bottom: '28px', right: '24px', zIndex: 2, display: 'flex', gap: '6px' }}>
         {marathons.map((_, i) => (
           <div key={i} style={{
             width: i === current ? '20px' : '6px',
-            height: '6px',
-            borderRadius: '3px',
+            height: '6px', borderRadius: '3px',
             background: i === current ? '#FC4C02' : 'rgba(255,255,255,0.3)',
-            transition: 'all 0.3s ease',
-            cursor: 'pointer',
-          }} onClick={() => { setFading(true); setTimeout(() => { setCurrent(i); setFading(false) }, 600) }} />
+          }} />
         ))}
       </div>
 
