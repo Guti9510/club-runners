@@ -75,6 +75,40 @@ export default function Dashboard() {
   const paceZones = getPaceZones(filtered, threshold)
   const insights = getTrainingInsights(activities, threshold)
 
+  const allTimeKm = activities.filter(a => a.type === 'Run').reduce((sum, a) => sum + a.distance / 1000, 0)
+
+  const cityPairs = [
+    { from: 'San José', to: 'Panama City', km: 980, flag: '🇨🇷→🇵🇦' },
+    { from: 'San José', to: 'Mexico City', km: 2200, flag: '🇨🇷→🇲🇽' },
+    { from: 'Paris', to: 'Amsterdam', km: 500, flag: '🇫🇷→🇳🇱' },
+    { from: 'London', to: 'Edinburgh', km: 650, flag: '🇬🇧→🏴󠁧󠁢󠁳󠁣󠁴󠁿' },
+    { from: 'Madrid', to: 'Lisbon', km: 625, flag: '🇪🇸→🇵🇹' },
+    { from: 'New York', to: 'Washington D.C.', km: 360, flag: '🇺🇸→🇺🇸' },
+    { from: 'Milan', to: 'Copenhagen', km: 1500, flag: '🇮🇹→🇩🇰' },
+    { from: 'Paris', to: 'Berlin', km: 1050, flag: '🇫🇷→🇩🇪' },
+    { from: 'Rome', to: 'Barcelona', km: 1300, flag: '🇮🇹→🇪🇸' },
+    { from: 'Boston', to: 'Washington D.C.', km: 700, flag: '🇺🇸→🇺🇸' },
+    { from: 'New York', to: 'Chicago', km: 1200, flag: '🇺🇸→🇺🇸' },
+    { from: 'Los Angeles', to: 'Seattle', km: 1550, flag: '🇺🇸→🇺🇸' },
+    { from: 'San José', to: 'Miami', km: 2700, flag: '🇨🇷→🇺🇸' },
+    { from: 'Tokyo', to: 'Seoul', km: 1400, flag: '🇯🇵→🇰🇷' },
+    { from: 'Berlin', to: 'Madrid', km: 2300, flag: '🇩🇪→🇪🇸' },
+    { from: 'London', to: 'Rome', km: 1900, flag: '🇬🇧→🇮🇹' },
+    { from: 'San José', to: 'Bogotá', km: 2600, flag: '🇨🇷→🇨🇴' },
+    { from: 'Buenos Aires', to: 'Santiago', km: 1200, flag: '🇦🇷→🇨🇱' },
+    { from: 'New York', to: 'Miami', km: 2000, flag: '🇺🇸→🇺🇸' },
+    { from: 'Sydney', to: 'Melbourne', km: 880, flag: '🇦🇺→🇦🇺' },
+  ]
+
+  const getDistanceEquivalent = (km: number) => {
+    const sorted = [...cityPairs].sort((a, b) => Math.abs(a.km - km) - Math.abs(b.km - km))
+    const best = sorted[0]
+    const pct = Math.round((km / best.km) * 100)
+    return { ...best, pct }
+  }
+
+  const distEquiv = allTimeKm > 50 ? getDistanceEquivalent(allTimeKm) : null
+
   const cardStyle = {
     background: 'rgba(255,255,255,0.05)',
     border: '1px solid rgba(255,255,255,0.08)',
@@ -158,6 +192,33 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+
+        {/* Distance Equivalent Card */}
+        {distEquiv && (
+          <div style={{
+            ...cardStyle,
+            marginBottom: '28px',
+            background: 'linear-gradient(135deg, rgba(252,76,2,0.15) 0%, rgba(252,76,2,0.05) 100%)',
+            border: '1px solid rgba(252,76,2,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '20px',
+          }}>
+            <div style={{ fontSize: '2.5rem' }}>🌍</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '0.8rem', color: '#FC4C02', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                Did you know?
+              </div>
+              <div style={{ fontSize: '1.1rem', fontWeight: '700', color: 'white', lineHeight: 1.4 }}>
+                With your <span style={{ color: '#FC4C02' }}>{Math.round(allTimeKm).toLocaleString()} km</span> all-time, you could have run from <span style={{ color: 'white' }}>{distEquiv.flag} {distEquiv.from}</span> to <span style={{ color: 'white' }}>{distEquiv.to}</span> — {distEquiv.pct > 100 ? `${distEquiv.pct - 100}% beyond your destination!` : `you're ${distEquiv.pct}% of the way there!`}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#FC4C02' }}>{distEquiv.pct}%</div>
+              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{distEquiv.km} km route</div>
+            </div>
+          </div>
+        )}
 
         {/* Charts Row */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px' }}>
