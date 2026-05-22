@@ -49,8 +49,7 @@ export default function Login() {
         backgroundImage: `url(${marathon.photo})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        opacity: fading ? 0 : 1,
-        transition: 'opacity 0.6s ease-in-out',
+        opacity: 1,
       }} />
 
       {/* Dark overlay */}
