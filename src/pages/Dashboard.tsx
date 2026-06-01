@@ -5,7 +5,7 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts'
 import {
-  getStoredAuth, clearAuth, isTokenValid, getAllActivities,
+  getStoredAuth, clearAuth, getAllActivities, getValidToken,
   formatDistance, formatPace, formatDuration,
   getWeeklyStats, getPaceZones, thresholdFromTest3K, getTrainingInsights,
 } from '../lib/strava'
@@ -34,7 +34,7 @@ const filterByPeriod = (activities: any[], period: Period) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { athlete, accessToken } = getStoredAuth()
+  const { athlete } = getStoredAuth()
   const [activities, setActivities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>('year')
@@ -50,16 +50,13 @@ export default function Dashboard() {
   })()
 
   useEffect(() => {
-    if (!isTokenValid() || !accessToken) {
-      clearAuth()
-      navigate('/')
-      return
-    }
-
-    getAllActivities(accessToken)
-      .then(setActivities)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    getValidToken().then(token => {
+      if (!token) { clearAuth(); navigate('/'); return }
+      getAllActivities(token)
+        .then(setActivities)
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    })
   }, [])
 
   const filtered = filterByPeriod(activities, period)

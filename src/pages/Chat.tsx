@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getStoredAuth, clearAuth, isTokenValid, getAllActivities } from '../lib/strava'
+import { clearAuth, getAllActivities, getValidToken } from '../lib/strava'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -18,7 +18,7 @@ const suggestions = [
 
 export default function Chat() {
   const navigate = useNavigate()
-  const { accessToken } = getStoredAuth()
+  // token via getValidToken
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', text: 'Hey! Ask me anything about your running history. I have access to all your Strava activities.' },
   ])
@@ -29,10 +29,12 @@ export default function Chat() {
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (!isTokenValid()) { clearAuth(); navigate('/'); return }
-    getAllActivities(accessToken!).then(acts => {
-      setActivities(acts)
-      setLoadingActivities(false)
+    getValidToken().then(token => {
+      if (!token) { clearAuth(); navigate('/'); return }
+      getAllActivities(token).then(acts => {
+        setActivities(acts)
+        setLoadingActivities(false)
+      })
     })
   }, [])
 

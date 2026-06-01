@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { getStoredAuth, clearAuth, isTokenValid, getAllActivities } from '../lib/strava'
+import { clearAuth, getAllActivities, getValidToken } from '../lib/strava'
 
 // Fix leaflet default marker icons
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -87,7 +87,7 @@ const filterByPeriod = (activities: any[], period: Period) => {
 
 export default function ClubMap() {
   const navigate = useNavigate()
-  const { accessToken } = getStoredAuth()
+  // accessToken handled via getValidToken
   const [activities, setActivities] = useState<any[]>([])
   const [clusters, setClusters] = useState<CountryCluster[]>([])
   const [loading, setLoading] = useState(true)
@@ -95,11 +95,13 @@ export default function ClubMap() {
   const [period, setPeriod] = useState<Period>('all')
 
   useEffect(() => {
-    if (!isTokenValid() || !accessToken) { clearAuth(); navigate('/'); return }
-    getAllActivities(accessToken)
-      .then(setActivities)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    getValidToken().then(token => {
+      if (!token) { clearAuth(); navigate('/'); return }
+      getAllActivities(token)
+        .then(setActivities)
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    })
   }, [])
 
   // Group by country using 1-decimal lat/lng grid, then geocode unique centroids

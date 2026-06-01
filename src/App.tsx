@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { isTokenValid } from './lib/strava'
 import Nav from './components/Nav'
 import Login from './pages/Login'
@@ -22,20 +22,26 @@ const marathonPhotos = [
   'https://images.unsplash.com/photo-1485871981521-5b1fd3805eee?w=1600&q=80&auto=format&fit=crop',
 ]
 
-function MarathonBackground() {
-  const [current, setCurrent] = useState(0)
-  const [fading, setFading] = useState(false)
+const FOUR_HOURS_MS = 4 * 60 * 60 * 1000
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFading(true)
-      setTimeout(() => {
-        setCurrent(prev => (prev + 1) % marathonPhotos.length)
-        setFading(false)
-      }, 600)
-    }, 5000)
-    return () => clearInterval(interval)
-  }, [])
+function getStoredPhoto() {
+  try {
+    const saved = localStorage.getItem('marathon_bg')
+    if (saved) {
+      const { index, timestamp } = JSON.parse(saved)
+      if (Date.now() - timestamp < FOUR_HOURS_MS) return index
+      const next = (index + 1) % marathonPhotos.length
+      localStorage.setItem('marathon_bg', JSON.stringify({ index: next, timestamp: Date.now() }))
+      return next
+    }
+  } catch {}
+  localStorage.setItem('marathon_bg', JSON.stringify({ index: 0, timestamp: Date.now() }))
+  return 0
+}
+
+function MarathonBackground() {
+  const [current] = useState(() => getStoredPhoto())
+  const [fading] = useState(false)
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>

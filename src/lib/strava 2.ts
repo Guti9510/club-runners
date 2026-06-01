@@ -114,35 +114,6 @@ export const isTokenValid = () => {
   return Date.now() / 1000 < parseInt(expiresAt)
 }
 
-export const refreshAccessToken = async (): Promise<string | null> => {
-  const refreshToken = localStorage.getItem('strava_refresh_token')
-  if (!refreshToken) return null
-  try {
-    const res = await fetch('https://www.strava.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: import.meta.env.VITE_STRAVA_CLIENT_ID,
-        client_secret: import.meta.env.VITE_STRAVA_CLIENT_SECRET,
-        grant_type: 'refresh_token',
-        refresh_token: refreshToken,
-      }),
-    })
-    const data = await res.json()
-    if (data.access_token) {
-      saveAuth(data)
-      return data.access_token
-    }
-  } catch {}
-  return null
-}
-
-// Returns a valid access token, refreshing automatically if expired
-export const getValidToken = async (): Promise<string | null> => {
-  if (isTokenValid()) return localStorage.getItem('strava_access_token')
-  return await refreshAccessToken()
-}
-
 export const formatPace = (metersPerSecond: number) => {
   if (!metersPerSecond || metersPerSecond <= 0) return '--:-- /km'
   const minutesPerKm = 1000 / (metersPerSecond * 60)

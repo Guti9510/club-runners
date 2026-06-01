@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getStoredAuth, isTokenValid, clearAuth, getAllActivities, formatDistance, formatDuration } from '../lib/strava'
+import { getStoredAuth, clearAuth, getAllActivities, getValidToken, formatDistance, formatDuration } from '../lib/strava'
 import { CLUB_KEY, ONBOARDING_KEY } from './Onboarding'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
 
@@ -26,7 +26,7 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function ClubHub() {
   const navigate = useNavigate()
-  const { athlete, accessToken } = getStoredAuth()
+  const { athlete } = getStoredAuth()
   const [activities, setActivities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>('month')
@@ -37,11 +37,13 @@ export default function ClubHub() {
   const isInClub = !!clubName
 
   useEffect(() => {
-    if (!isTokenValid() || !accessToken) { clearAuth(); navigate('/'); return }
-    getAllActivities(accessToken)
-      .then(setActivities)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    getValidToken().then(token => {
+      if (!token) { clearAuth(); navigate('/'); return }
+      getAllActivities(token)
+        .then(setActivities)
+        .catch(console.error)
+        .finally(() => setLoading(false))
+    })
   }, [])
 
   const filtered = filterByPeriod(activities, period)
