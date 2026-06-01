@@ -9,6 +9,7 @@ import {
   formatDistance, formatPace, formatDuration,
   getWeeklyStats, getPaceZones, thresholdFromTest3K, getTrainingInsights,
 } from '../lib/strava'
+import { syncMemberStats } from '../lib/syncStats'
 
 type Period = 'week' | 'month' | 'year' | 'all'
 
@@ -53,7 +54,10 @@ export default function Dashboard() {
     getValidToken().then(token => {
       if (!token) { clearAuth(); navigate('/'); return }
       getAllActivities(token)
-        .then(setActivities)
+        .then(acts => {
+          setActivities(acts)
+          syncMemberStats(athlete, acts)
+        })
         .catch(console.error)
         .finally(() => setLoading(false))
     })
