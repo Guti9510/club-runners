@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getStoredAuth, clearAuth, getAllActivities, getValidToken, formatDistance, formatDuration } from '../lib/strava'
 import { CLUB_KEY, ONBOARDING_KEY } from './Onboarding'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from 'recharts'
-import { getClubWeeklyStats } from '../lib/syncStats'
+import { getClubWeeklyStats, syncMemberStats } from '../lib/syncStats'
 
 type Period = 'week' | 'month' | 'year' | 'all'
 
@@ -27,7 +27,7 @@ const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
 export default function ClubHub() {
   const navigate = useNavigate()
-  getStoredAuth()
+  const { athlete } = getStoredAuth()
   const [activities, setActivities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>('month')
@@ -35,23 +35,35 @@ export default function ClubHub() {
   const [clubInput, setClubInput] = useState('')
   const [clubWeekly, setClubWeekly] = useState<{ label: string; km: number; runs: number }[]>([])
   const [clubMembers, setClubMembers] = useState<{ name: string; profile: string | null; km: number; runs: number }[]>([])
+  const [clubLoading, setClubLoading] = useState(true)
 
   const clubName = localStorage.getItem(CLUB_KEY)
   const isInClub = !!clubName
+
+  const loadClubData = () => {
+    setClubLoading(true)
+    getClubWeeklyStats()
+      .then(({ weeklyData, members }) => {
+        setClubWeekly(weeklyData)
+        setClubMembers(members)
+      })
+      .finally(() => setClubLoading(false))
+  }
 
   useEffect(() => {
     getValidToken().then(token => {
       if (!token) { clearAuth(); navigate('/'); return }
       getAllActivities(token)
-        .then(setActivities)
+        .then(acts => {
+          setActivities(acts)
+          // Sync this member's data to Supabase so Club Hub is always up to date
+          syncMemberStats(athlete, acts).then(loadClubData)
+        })
         .catch(console.error)
         .finally(() => setLoading(false))
     })
-    // Load club aggregate stats from Supabase
-    getClubWeeklyStats().then(({ weeklyData, members }) => {
-      setClubWeekly(weeklyData)
-      setClubMembers(members)
-    })
+    // Load club data immediately while activities fetch in background
+    loadClubData()
   }, [])
 
   const filtered = filterByPeriod(activities, period)
@@ -160,9 +172,22 @@ export default function ClubHub() {
         </div>
 
         {/* Club Weekly KM Chart */}
-        {clubWeekly.length > 0 && (
-          <div style={{ ...cardStyle, marginBottom: '28px' }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: '1rem', fontWeight: '700' }}>Club Weekly Distance (km) — All Members</h3>
+        <div style={{ ...cardStyle, marginBottom: '28px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: '700' }}>Club Weekly Distance (km)</h3>
+              <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                {clubLoading ? 'Loading...' : clubMembers.length > 0 ? `${clubMembers.length} member${clubMembers.length !== 1 ? 's' : ''} synced` : 'No data yet — visit Dashboard to sync'}
+              </div>
+            </div>
+            <button onClick={loadClubData} disabled={clubLoading} style={{
+              padding: '6px 12px', fontSize: '0.78rem', borderRadius: '8px', cursor: clubLoading ? 'default' : 'pointer',
+              background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8',
+            }}>
+              {clubLoading ? '⏳' : '🔄 Refresh'}
+            </button>
+          </div>
+          {clubWeekly.length > 0 ? (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={clubWeekly} margin={{ top: 24, right: 8, left: -20, bottom: 0 }}>
                 <XAxis dataKey="label" tick={{ fill: '#64748b', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -176,8 +201,12 @@ export default function ClubHub() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-        )}
+          ) : (
+            <div style={{ height: '230px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', fontSize: '0.85rem' }}>
+              {clubLoading ? 'Loading club data...' : 'No data yet. Members need to visit their Dashboard to sync.'}
+            </div>
+          )}
+        </div>
 
         {/* Charts Row */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '28px' }}>

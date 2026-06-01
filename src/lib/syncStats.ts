@@ -18,7 +18,9 @@ export const syncMemberStats = async (athlete: any, activities: any[]) => {
     updated_at: new Date().toISOString(),
   }))
 
-  await supabase.from('member_stats').upsert(rows, { onConflict: 'id' })
+  const { error } = await supabase.from('member_stats').upsert(rows, { onConflict: 'id' })
+  if (error) console.error('[syncMemberStats] Supabase error:', error.message, error.details)
+  else console.log(`[syncMemberStats] Synced ${rows.length} weeks for athlete ${athlete.id}`)
 }
 
 export const getClubWeeklyStats = async () => {
@@ -26,7 +28,9 @@ export const getClubWeeklyStats = async () => {
     .from('member_stats')
     .select('*')
     .order('week_key', { ascending: true })
+  if (error) console.error('[getClubWeeklyStats] Supabase error:', error.message, error.details)
   if (error || !data) return { weeklyData: [], members: [] }
+  console.log(`[getClubWeeklyStats] ${data.length} rows from ${new Set(data.map(r => r.athlete_id)).size} members`)
 
   // Aggregate km per week across all members
   const weekMap: Record<string, { label: string; km: number; runs: number }> = {}
