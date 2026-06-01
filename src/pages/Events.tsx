@@ -4,12 +4,15 @@ import { getStoredAuth, isTokenValid, clearAuth } from '../lib/strava'
 import { CLUB_KEY } from './Onboarding'
 import { supabase } from '../lib/supabase'
 
+// Set VITE_ADMIN_ATHLETE_ID in Vercel env vars to your Strava athlete ID
+const ADMIN_ID = import.meta.env.VITE_ADMIN_ATHLETE_ID
+
 interface RunEvent {
   id: string
   title: string
   date: string
   type: 'race' | 'group_run' | 'track' | 'social' | 'other'
-  distances: string[]   // e.g. ['5K', '10K', 'Half Marathon']
+  distances: string[]
   customDistance?: number
   location?: string
   description?: string
@@ -70,8 +73,8 @@ const fmtTime = (secs: number) => {
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
   const s = secs % 60
-  if (h > 0) return `${h}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
-  return `${m}:${s.toString().padStart(2,'0')}`
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  return `${m}:${s.toString().padStart(2, '0')}`
 }
 
 const cardStyle: React.CSSProperties = {
@@ -92,6 +95,7 @@ export default function Events() {
   const [showCreate, setShowCreate] = useState(false)
   const [selectedEvent, setSelectedEvent] = useState<RunEvent | null>(null)
   const [showResultForm, setShowResultForm] = useState(false)
+  const [changingDistance, setChangingDistance] = useState(false)
 
   // Create form state
   const [form, setForm] = useState({
@@ -111,6 +115,10 @@ export default function Events() {
   const [resultNotes, setResultNotes] = useState('')
   const [resultDistance, setResultDistance] = useState('')
 
+  const athleteId = String(athlete?.id ?? 'unknown')
+  const athleteName = `${athlete?.firstname ?? ''} ${athlete?.lastname ?? ''}`.trim()
+  const isAdmin = ADMIN_ID ? athleteId === String(ADMIN_ID) : false
+
   useEffect(() => {
     if (!isTokenValid()) { clearAuth(); navigate('/'); return }
     ;(async () => {
@@ -128,9 +136,6 @@ export default function Events() {
   const now = new Date()
   const upcoming = events.filter(e => new Date(e.date) >= now).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   const past = events.filter(e => new Date(e.date) < now).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-
-  const athleteId = athlete?.id?.toString() ?? 'unknown'
-  const athleteName = `${athlete?.firstname ?? ''} ${athlete?.lastname ?? ''}`.trim()
 
   const handleCreate = async () => {
     if (!form.title || !form.date) return
@@ -150,7 +155,7 @@ export default function Events() {
       isClub: form.isClub,
       creatorId: athleteId,
       creatorName: athleteName,
-      attendees: [{ id: athleteId, name: athleteName }],
+      attendees: [],
       results: [],
     }
     const { error } = await supabase.from('events').insert(toRow(newEvent, clubName))
@@ -159,18 +164,33 @@ export default function Events() {
     setForm({ title: '', date: '', type: 'group_run', distances: [], customDistance: '', location: '', description: '', isClub: true })
   }
 
-  const toggleRSVP = async (eventId: string) => {
+  // RSVP: set distance (or no distance if event has none)
+  const rsvpWithDistance = async (eventId: string, distance?: string) => {
     const event = events.find(e => e.id === eventId)
     if (!event) return
-    const already = event.attendees.find(a => a.id === athleteId)
-    const newAttendees = already
-      ? event.attendees.filter(a => a.id !== athleteId)
-      : [...event.attendees, { id: athleteId, name: athleteName }]
+    // Remove existing entry for this user, then add fresh
+    const filtered = event.attendees.filter(a => a.id !== athleteId)
+    const newAttendees = [...filtered, { id: athleteId, name: athleteName, distance }]
     const { error } = await supabase.from('events').update({ attendees: newAttendees }).eq('id', eventId)
     if (!error) {
       const updated = events.map(e => e.id === eventId ? { ...e, attendees: newAttendees } : e)
       setEvents(updated)
-      if (selectedEvent?.id === eventId) setSelectedEvent(updated.find(e => e.id === eventId) ?? null)
+      setSelectedEvent(updated.find(e => e.id === eventId) ?? null)
+      setChangingDistance(false)
+    }
+  }
+
+  // Cancel RSVP
+  const cancelRsvp = async (eventId: string) => {
+    const event = events.find(e => e.id === eventId)
+    if (!event) return
+    const newAttendees = event.attendees.filter(a => a.id !== athleteId)
+    const { error } = await supabase.from('events').update({ attendees: newAttendees }).eq('id', eventId)
+    if (!error) {
+      const updated = events.map(e => e.id === eventId ? { ...e, attendees: newAttendees } : e)
+      setEvents(updated)
+      setSelectedEvent(updated.find(e => e.id === eventId) ?? null)
+      setChangingDistance(false)
     }
   }
 
@@ -207,7 +227,7 @@ export default function Events() {
   const displayList = tab === 'upcoming' ? upcoming : past
 
   return (
-    <div style={{ minHeight: '100vh',  fontFamily: "'Inter', sans-serif", color: 'white' }}>
+    <div style={{ minHeight: '100vh', fontFamily: "'Inter', sans-serif", color: 'white' }}>
       <div style={{ padding: '32px', maxWidth: '1000px', margin: '0 auto' }}>
 
         {/* Header */}
@@ -215,15 +235,18 @@ export default function Events() {
           <div>
             <h1 style={{ fontSize: '1.8rem', fontWeight: '800', margin: '0 0 4px' }}>Events 🗓️</h1>
             <p style={{ color: '#94a3b8', margin: 0 }}>
-              {clubName ? `Individual & ${clubName} club events` : 'Track races, group runs & more'}
+              {clubName ? `${clubName} club events` : 'Club races, group runs & more'}
             </p>
           </div>
-          <button onClick={() => setShowCreate(true)} style={{
-            padding: '10px 20px', background: '#FC4C02', color: 'white',
-            border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', fontSize: '0.9rem',
-          }}>
-            + Create Event
-          </button>
+          {/* Only the admin can create events */}
+          {isAdmin && (
+            <button onClick={() => setShowCreate(true)} style={{
+              padding: '10px 20px', background: '#FC4C02', color: 'white',
+              border: 'none', borderRadius: '12px', fontWeight: '700', cursor: 'pointer', fontSize: '0.9rem',
+            }}>
+              + Create Event
+            </button>
+          )}
         </div>
 
         {/* Tabs */}
@@ -252,22 +275,22 @@ export default function Events() {
               {tab === 'upcoming' ? 'No upcoming events' : 'No past events'}
             </div>
             <div style={{ color: '#64748b', fontSize: '0.85rem' }}>
-              {tab === 'upcoming' ? 'Create an event to get started!' : 'Past events will appear here.'}
+              {tab === 'upcoming' ? 'Events will appear here once created.' : 'Past events will appear here.'}
             </div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {displayList.map(event => {
-              const isAttending = event.attendees.some(a => a.id === athleteId)
-
+              const myEntry = event.attendees.find(a => a.id === athleteId)
+              const isAttending = !!myEntry
+              const daysUntil = Math.ceil((new Date(event.date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+              const isPast = new Date(event.date) < now
               const avgTime = event.results.filter(r => r.timeSeconds).length > 0
                 ? event.results.filter(r => r.timeSeconds).reduce((s, r) => s + (r.timeSeconds ?? 0), 0) / event.results.filter(r => r.timeSeconds).length
                 : null
-              const daysUntil = Math.ceil((new Date(event.date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-              const isPast = new Date(event.date) < now
 
               return (
-                <div key={event.id} onClick={() => setSelectedEvent(event)} style={{
+                <div key={event.id} onClick={() => { setSelectedEvent(event); setChangingDistance(false); setShowResultForm(false) }} style={{
                   ...cardStyle,
                   cursor: 'pointer',
                   transition: 'border-color 0.15s',
@@ -302,13 +325,20 @@ export default function Events() {
                           Avg: {fmtTime(Math.round(avgTime))}
                         </div>
                       )}
-                      <div style={{
-                        fontSize: '0.75rem', padding: '3px 10px', borderRadius: '12px', fontWeight: '600',
-                        background: isAttending ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.06)',
-                        color: isAttending ? '#10b981' : '#94a3b8',
-                      }}>
-                        {isAttending ? '✓ Going' : 'Not going'}
-                      </div>
+                      {isAttending ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                          <div style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: '12px', fontWeight: '600', background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
+                            ✓ Going
+                          </div>
+                          {myEntry?.distance && (
+                            <div style={{ fontSize: '0.72rem', color: '#FC4C02', fontWeight: '600' }}>{myEntry.distance}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.75rem', padding: '3px 10px', borderRadius: '12px', fontWeight: '600', background: 'rgba(255,255,255,0.06)', color: '#94a3b8' }}>
+                          Not going
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -317,8 +347,8 @@ export default function Events() {
           </div>
         )}
 
-        {/* Create Event Modal */}
-        {showCreate && (
+        {/* Create Event Modal — admin only */}
+        {showCreate && isAdmin && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '20px' }}>
             <div style={{ background: '#1e293b', borderRadius: '20px', padding: '32px', width: '100%', maxWidth: '480px', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90vh', overflowY: 'auto' }}>
               <h2 style={{ margin: '0 0 20px', fontSize: '1.2rem' }}>Create Event</h2>
@@ -344,7 +374,7 @@ export default function Events() {
                   </div>
                 </div>
                 <div>
-                  <label style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Distances</label>
+                  <label style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '6px' }}>Distances offered</label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
                     {PRESET_DISTANCES.map(d => (
                       <button key={d} onClick={() => toggleDistance(d)} type="button" style={{
@@ -388,197 +418,276 @@ export default function Events() {
         )}
 
         {/* Event Detail Modal */}
-        {selectedEvent && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '20px' }}>
-            <div style={{ background: '#1e293b', borderRadius: '20px', padding: '32px', width: '100%', maxWidth: '520px', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90vh', overflowY: 'auto' }}>
-              {/* Event header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                <div>
-                  <div style={{ fontWeight: '800', fontSize: '1.2rem', marginBottom: '4px' }}>{selectedEvent.title}</div>
-                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', background: `${typeColor(selectedEvent.type)}20`, color: typeColor(selectedEvent.type) }}>{typeLabel(selectedEvent.type)}</span>
-                    {selectedEvent.isClub && <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(59,130,246,0.15)', color: '#93c5fd' }}>👥 Club</span>}
-                  </div>
-                </div>
-                <button onClick={() => setSelectedEvent(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
-              </div>
+        {selectedEvent && (() => {
+          const myEntry = selectedEvent.attendees.find(a => a.id === athleteId)
+          const isAttending = !!myEntry
+          const isPast = new Date(selectedEvent.date) < now
+          const hasDistances = selectedEvent.distances?.length > 0
 
-              {/* Details */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px', fontSize: '0.85rem', color: '#94a3b8' }}>
-                <div>📅 {new Date(selectedEvent.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
-                {selectedEvent.location && <div>📍 {selectedEvent.location}</div>}
-                {selectedEvent.distances?.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {selectedEvent.distances.map(d => (
-                      <span key={d} style={{ fontSize: '0.78rem', padding: '3px 10px', borderRadius: '10px', background: 'rgba(252,76,2,0.12)', color: '#FC4C02', fontWeight: '600' }}>🏃 {d}</span>
-                    ))}
-                  </div>
-                )}
-                {selectedEvent.description && <div style={{ color: '#cbd5e1', marginTop: '4px' }}>{selectedEvent.description}</div>}
-              </div>
+          return (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 300, padding: '20px' }}>
+              <div style={{ background: '#1e293b', borderRadius: '20px', padding: '32px', width: '100%', maxWidth: '520px', border: '1px solid rgba(255,255,255,0.1)', maxHeight: '90vh', overflowY: 'auto' }}>
 
-              {/* RSVP */}
-              <div style={{ marginBottom: '20px' }}>
-                <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '0.9rem' }}>
-                  👥 Who's Going ({selectedEvent.attendees.length})
-                </div>
-                {selectedEvent.attendees.length > 0 ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
-                    {selectedEvent.distances?.length > 0
-                      ? selectedEvent.distances.map(dist => {
-                          const going = selectedEvent.attendees.filter(a => a.distance === dist)
-                          if (going.length === 0) return null
-                          return (
-                            <div key={dist}>
-                              <div style={{ fontSize: '0.75rem', color: '#FC4C02', fontWeight: '700', marginBottom: '4px' }}>{dist}</div>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                {going.map(a => (
-                                  <span key={a.id} style={{ fontSize: '0.78rem', padding: '3px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', color: a.id === athleteId ? '#FC4C02' : '#cbd5e1' }}>
-                                    {a.name}{a.id === athleteId ? ' (you)' : ''}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )
-                        })
-                      : (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                          {selectedEvent.attendees.map(a => (
-                            <span key={a.id} style={{ fontSize: '0.78rem', padding: '4px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', color: a.id === athleteId ? '#FC4C02' : '#cbd5e1' }}>
-                              {a.name}{a.id === athleteId ? ' (you)' : ''}
-                            </span>
-                          ))}
-                        </div>
-                      )
-                    }
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '10px' }}>No one yet — be the first!</div>
-                )}
-
-                {selectedEvent.distances?.length > 0 && !selectedEvent.attendees.some(a => a.id === athleteId) ? (
+                {/* Event header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                   <div>
-                    <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '8px' }}>Which distance are you running?</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                      {selectedEvent.distances.map(d => (
-                        <button key={d} onClick={async () => {
-                          const newAttendees = [...selectedEvent.attendees, { id: athleteId, name: athleteName, distance: d }]
-                          const { error } = await supabase.from('events').update({ attendees: newAttendees }).eq('id', selectedEvent.id)
-                          if (!error) {
-                            const updated = events.map(e => e.id !== selectedEvent.id ? e : { ...e, attendees: newAttendees })
-                            setEvents(updated)
-                            setSelectedEvent(updated.find(e => e.id === selectedEvent.id) ?? null)
-                          }
-                        }} style={{
-                          padding: '7px 16px', borderRadius: '10px', border: '1px solid rgba(16,185,129,0.3)',
-                          background: 'rgba(16,185,129,0.1)', color: '#10b981', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem',
-                        }}>✓ {d}</button>
-                      ))}
+                    <div style={{ fontWeight: '800', fontSize: '1.2rem', marginBottom: '4px' }}>{selectedEvent.title}</div>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', background: `${typeColor(selectedEvent.type)}20`, color: typeColor(selectedEvent.type) }}>{typeLabel(selectedEvent.type)}</span>
+                      {selectedEvent.isClub && <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '10px', background: 'rgba(59,130,246,0.15)', color: '#93c5fd' }}>👥 Club</span>}
                     </div>
                   </div>
-                ) : (
-                  <button onClick={() => toggleRSVP(selectedEvent.id)} style={{
-                    padding: '8px 18px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem',
-                    background: selectedEvent.attendees.some(a => a.id === athleteId) ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)',
-                    color: selectedEvent.attendees.some(a => a.id === athleteId) ? '#ef4444' : '#10b981',
-                  }}>
-                    {selectedEvent.attendees.some(a => a.id === athleteId) ? "✗ Can't make it" : "✓ I'm going!"}
-                  </button>
-                )}
-              </div>
+                  <button onClick={() => setSelectedEvent(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+                </div>
 
-              {/* Results (past events) */}
-              {new Date(selectedEvent.date) < now && (
+                {/* Details */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '20px', fontSize: '0.85rem', color: '#94a3b8' }}>
+                  <div>📅 {new Date(selectedEvent.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                  {selectedEvent.location && <div>📍 {selectedEvent.location}</div>}
+                  {hasDistances && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {selectedEvent.distances.map(d => (
+                        <span key={d} style={{ fontSize: '0.78rem', padding: '3px 10px', borderRadius: '10px', background: 'rgba(252,76,2,0.12)', color: '#FC4C02', fontWeight: '600' }}>🏃 {d}</span>
+                      ))}
+                    </div>
+                  )}
+                  {selectedEvent.description && <div style={{ color: '#cbd5e1', marginTop: '4px' }}>{selectedEvent.description}</div>}
+                </div>
+
+                {/* ── RSVP SECTION ── */}
+                {!isPast && (
+                  <div style={{ marginBottom: '20px', padding: '16px', background: 'rgba(255,255,255,0.03)', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.07)' }}>
+                    {isAttending && !changingDistance ? (
+                      /* Already going */
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: myEntry?.distance ? '10px' : '12px' }}>
+                          <span style={{ fontSize: '1.1rem' }}>✅</span>
+                          <div>
+                            <div style={{ fontWeight: '700', fontSize: '0.9rem', color: '#10b981' }}>You're going!</div>
+                            {myEntry?.distance && (
+                              <div style={{ fontSize: '0.8rem', color: '#FC4C02', fontWeight: '600', marginTop: '2px' }}>
+                                {myEntry.distance}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {hasDistances && (
+                            <button onClick={() => setChangingDistance(true)} style={{
+                              padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.82rem',
+                              background: 'rgba(252,76,2,0.1)', border: '1px solid rgba(252,76,2,0.3)', color: '#FC4C02',
+                            }}>
+                              {myEntry?.distance ? '↔ Change distance' : '+ Select distance'}
+                            </button>
+                          )}
+                          <button onClick={() => cancelRsvp(selectedEvent.id)} style={{
+                            padding: '6px 14px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', fontSize: '0.82rem',
+                            background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444',
+                          }}>
+                            ✗ Can't make it
+                          </button>
+                        </div>
+                      </div>
+                    ) : changingDistance ? (
+                      /* Changing distance */
+                      <div>
+                        <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#cbd5e1', marginBottom: '10px' }}>
+                          {isAttending ? 'Change your distance:' : 'Which distance will you run?'}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                          {selectedEvent.distances.map(d => (
+                            <button key={d} onClick={() => rsvpWithDistance(selectedEvent.id, d)} style={{
+                              padding: '9px 18px', borderRadius: '10px', border: '1px solid rgba(16,185,129,0.4)',
+                              background: 'rgba(16,185,129,0.1)', color: '#10b981', cursor: 'pointer', fontWeight: '700', fontSize: '0.9rem',
+                              transition: 'all 0.15s',
+                            }}>
+                              🏃 {d}
+                            </button>
+                          ))}
+                        </div>
+                        {isAttending && (
+                          <button onClick={() => setChangingDistance(false)} style={{
+                            padding: '6px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem',
+                            background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#64748b',
+                          }}>
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      /* Not attending yet */
+                      <div>
+                        {hasDistances ? (
+                          <>
+                            <div style={{ fontSize: '0.85rem', fontWeight: '600', color: '#cbd5e1', marginBottom: '10px' }}>
+                              Which distance will you run?
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                              {selectedEvent.distances.map(d => (
+                                <button key={d} onClick={() => rsvpWithDistance(selectedEvent.id, d)} style={{
+                                  padding: '9px 18px', borderRadius: '10px', border: '1px solid rgba(16,185,129,0.4)',
+                                  background: 'rgba(16,185,129,0.1)', color: '#10b981', cursor: 'pointer', fontWeight: '700', fontSize: '0.9rem',
+                                  transition: 'all 0.15s',
+                                }}>
+                                  🏃 {d}
+                                </button>
+                              ))}
+                            </div>
+                          </>
+                        ) : (
+                          <button onClick={() => rsvpWithDistance(selectedEvent.id)} style={{
+                            padding: '10px 22px', borderRadius: '10px', border: 'none', cursor: 'pointer', fontWeight: '700', fontSize: '0.9rem',
+                            background: 'rgba(16,185,129,0.15)', color: '#10b981',
+                          }}>
+                            ✓ I'm going!
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Who's going */}
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '0.9rem' }}>
-                    🏁 Results ({selectedEvent.results.length})
+                    👥 Who's Going ({selectedEvent.attendees.length})
                   </div>
-                  {selectedEvent.results.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
-                      {(selectedEvent.distances?.length > 0
-                        ? selectedEvent.distances
-                        : [undefined]
-                      ).map(dist => {
-                        const distResults = selectedEvent.results.filter(r => dist ? r.distance === dist : true)
-                        if (distResults.length === 0) return null
-                        const withTime = distResults.filter(r => r.timeSeconds)
-                        const avg = withTime.length > 1
-                          ? Math.round(withTime.reduce((s, r) => s + (r.timeSeconds ?? 0), 0) / withTime.length)
-                          : null
+                  {selectedEvent.attendees.length === 0 ? (
+                    <div style={{ fontSize: '0.82rem', color: '#64748b' }}>No one yet — be the first!</div>
+                  ) : hasDistances ? (
+                    /* Group by distance */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {selectedEvent.distances.map(dist => {
+                        const going = selectedEvent.attendees.filter(a => a.distance === dist)
+                        if (going.length === 0) return null
                         return (
-                          <div key={dist ?? 'all'}>
-                            {dist && <div style={{ fontSize: '0.75rem', color: '#FC4C02', fontWeight: '700', marginBottom: '6px' }}>{dist}</div>}
-                            {distResults.map(r => (
-                              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', marginBottom: '4px' }}>
-                                <span style={{ fontSize: '0.85rem', color: r.id === athleteId ? '#FC4C02' : 'white' }}>{r.name}{r.id === athleteId ? ' (you)' : ''}</span>
-                                <div style={{ textAlign: 'right' }}>
-                                  {r.timeSeconds ? <div style={{ fontWeight: '700', color: '#10b981' }}>{fmtTime(r.timeSeconds)}</div> : null}
-                                  {r.notes && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{r.notes}</div>}
-                                </div>
-                              </div>
-                            ))}
-                            {avg && <div style={{ fontSize: '0.78rem', color: '#94a3b8', padding: '2px 12px' }}>Club avg: {fmtTime(avg)}</div>}
+                          <div key={dist}>
+                            <div style={{ fontSize: '0.75rem', color: '#FC4C02', fontWeight: '700', marginBottom: '4px' }}>{dist} · {going.length} runner{going.length !== 1 ? 's' : ''}</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {going.map(a => (
+                                <span key={a.id} style={{ fontSize: '0.78rem', padding: '3px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', color: a.id === athleteId ? '#FC4C02' : '#cbd5e1' }}>
+                                  {a.name}{a.id === athleteId ? ' (you)' : ''}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )
                       })}
-                    </div>
-                  )}
-
-                  {!showResultForm ? (
-                    <button onClick={() => setShowResultForm(true)} style={{
-                      padding: '8px 18px', borderRadius: '10px', border: '1px solid rgba(252,76,2,0.3)',
-                      background: 'rgba(252,76,2,0.1)', color: '#FC4C02', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem',
-                    }}>
-                      + Log my result
-                    </button>
-                  ) : (
-                    <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '14px' }}>
-                      {selectedEvent.distances?.length > 0 && (
-                        <div style={{ marginBottom: '10px' }}>
-                          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '6px' }}>Your distance</div>
+                      {/* Attendees with no distance selected */}
+                      {selectedEvent.attendees.filter(a => !a.distance).length > 0 && (
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontWeight: '700', marginBottom: '4px' }}>Distance TBD</div>
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {selectedEvent.distances.map(d => (
-                              <button key={d} onClick={() => setResultDistance(d)} type="button" style={{
-                                padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600',
-                                border: `1px solid ${resultDistance === d ? '#FC4C02' : 'rgba(255,255,255,0.1)'}`,
-                                background: resultDistance === d ? 'rgba(252,76,2,0.2)' : 'transparent',
-                                color: resultDistance === d ? '#FC4C02' : '#94a3b8',
-                              }}>{d}</button>
+                            {selectedEvent.attendees.filter(a => !a.distance).map(a => (
+                              <span key={a.id} style={{ fontSize: '0.78rem', padding: '3px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', color: a.id === athleteId ? '#FC4C02' : '#cbd5e1' }}>
+                                {a.name}{a.id === athleteId ? ' (you)' : ''}
+                              </span>
                             ))}
                           </div>
                         </div>
                       )}
-                      <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '8px' }}>Your finish time (optional)</div>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '10px' }}>
-                        <input type="number" value={resultTime.h} onChange={e => setResultTime(t => ({ ...t, h: e.target.value }))} placeholder="h" min="0" style={{ ...inputStyle, width: '50px', textAlign: 'center', padding: '6px' }} />
-                        <span style={{ color: '#64748b' }}>:</span>
-                        <input type="number" value={resultTime.m} onChange={e => setResultTime(t => ({ ...t, m: e.target.value }))} placeholder="mm" min="0" max="59" style={{ ...inputStyle, width: '50px', textAlign: 'center', padding: '6px' }} />
-                        <span style={{ color: '#64748b' }}>:</span>
-                        <input type="number" value={resultTime.s} onChange={e => setResultTime(t => ({ ...t, s: e.target.value }))} placeholder="ss" min="0" max="59" style={{ ...inputStyle, width: '50px', textAlign: 'center', padding: '6px' }} />
-                        <span style={{ color: '#64748b', fontSize: '0.75rem' }}>h:mm:ss</span>
-                      </div>
-                      <input value={resultNotes} onChange={e => setResultNotes(e.target.value)} placeholder="Notes (optional)" style={{ ...inputStyle, marginBottom: '10px' }} />
-                      <div style={{ display: 'flex', gap: '8px' }}>
-                        <button onClick={() => submitResult(selectedEvent.id)} style={{ flex: 1, padding: '8px', background: '#FC4C02', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem' }}>Save</button>
-                        <button onClick={() => setShowResultForm(false)} style={{ flex: 1, padding: '8px', background: 'transparent', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
-                      </div>
+                    </div>
+                  ) : (
+                    /* No distances — flat list */
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                      {selectedEvent.attendees.map(a => (
+                        <span key={a.id} style={{ fontSize: '0.78rem', padding: '4px 10px', borderRadius: '12px', background: 'rgba(255,255,255,0.07)', color: a.id === athleteId ? '#FC4C02' : '#cbd5e1' }}>
+                          {a.name}{a.id === athleteId ? ' (you)' : ''}
+                        </span>
+                      ))}
                     </div>
                   )}
                 </div>
-              )}
 
-              {/* Delete */}
-              {selectedEvent.creatorId === athleteId && (
-                <button onClick={() => deleteEvent(selectedEvent.id)} style={{
-                  padding: '8px 14px', background: 'transparent', color: '#ef4444',
-                  border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem',
-                }}>
-                  Delete event
-                </button>
-              )}
+                {/* Results (past events) */}
+                {isPast && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{ fontWeight: '700', marginBottom: '10px', fontSize: '0.9rem' }}>
+                      🏁 Results ({selectedEvent.results.length})
+                    </div>
+                    {selectedEvent.results.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
+                        {(hasDistances ? selectedEvent.distances : [undefined]).map(dist => {
+                          const distResults = selectedEvent.results.filter(r => dist ? r.distance === dist : true)
+                          if (distResults.length === 0) return null
+                          const withTime = distResults.filter(r => r.timeSeconds)
+                          const avg = withTime.length > 1
+                            ? Math.round(withTime.reduce((s, r) => s + (r.timeSeconds ?? 0), 0) / withTime.length)
+                            : null
+                          return (
+                            <div key={dist ?? 'all'}>
+                              {dist && <div style={{ fontSize: '0.75rem', color: '#FC4C02', fontWeight: '700', marginBottom: '6px' }}>{dist}</div>}
+                              {distResults.map(r => (
+                                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', marginBottom: '4px' }}>
+                                  <span style={{ fontSize: '0.85rem', color: r.id === athleteId ? '#FC4C02' : 'white' }}>{r.name}{r.id === athleteId ? ' (you)' : ''}</span>
+                                  <div style={{ textAlign: 'right' }}>
+                                    {r.timeSeconds ? <div style={{ fontWeight: '700', color: '#10b981' }}>{fmtTime(r.timeSeconds)}</div> : null}
+                                    {r.notes && <div style={{ fontSize: '0.75rem', color: '#64748b' }}>{r.notes}</div>}
+                                  </div>
+                                </div>
+                              ))}
+                              {avg && <div style={{ fontSize: '0.78rem', color: '#94a3b8', padding: '2px 12px' }}>Club avg: {fmtTime(avg)}</div>}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {!showResultForm ? (
+                      <button onClick={() => setShowResultForm(true)} style={{
+                        padding: '8px 18px', borderRadius: '10px', border: '1px solid rgba(252,76,2,0.3)',
+                        background: 'rgba(252,76,2,0.1)', color: '#FC4C02', cursor: 'pointer', fontWeight: '600', fontSize: '0.85rem',
+                      }}>
+                        + Log my result
+                      </button>
+                    ) : (
+                      <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: '12px', padding: '14px' }}>
+                        {hasDistances && (
+                          <div style={{ marginBottom: '10px' }}>
+                            <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '6px' }}>Your distance</div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {selectedEvent.distances.map(d => (
+                                <button key={d} onClick={() => setResultDistance(d)} type="button" style={{
+                                  padding: '5px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem', fontWeight: '600',
+                                  border: `1px solid ${resultDistance === d ? '#FC4C02' : 'rgba(255,255,255,0.1)'}`,
+                                  background: resultDistance === d ? 'rgba(252,76,2,0.2)' : 'transparent',
+                                  color: resultDistance === d ? '#FC4C02' : '#94a3b8',
+                                }}>{d}</button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '8px' }}>Your finish time (optional)</div>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '10px' }}>
+                          <input type="number" value={resultTime.h} onChange={e => setResultTime(t => ({ ...t, h: e.target.value }))} placeholder="h" min="0" style={{ ...inputStyle, width: '50px', textAlign: 'center', padding: '6px' }} />
+                          <span style={{ color: '#64748b' }}>:</span>
+                          <input type="number" value={resultTime.m} onChange={e => setResultTime(t => ({ ...t, m: e.target.value }))} placeholder="mm" min="0" max="59" style={{ ...inputStyle, width: '50px', textAlign: 'center', padding: '6px' }} />
+                          <span style={{ color: '#64748b' }}>:</span>
+                          <input type="number" value={resultTime.s} onChange={e => setResultTime(t => ({ ...t, s: e.target.value }))} placeholder="ss" min="0" max="59" style={{ ...inputStyle, width: '50px', textAlign: 'center', padding: '6px' }} />
+                          <span style={{ color: '#64748b', fontSize: '0.75rem' }}>h:mm:ss</span>
+                        </div>
+                        <input value={resultNotes} onChange={e => setResultNotes(e.target.value)} placeholder="Notes (optional)" style={{ ...inputStyle, marginBottom: '10px' }} />
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={() => submitResult(selectedEvent.id)} style={{ flex: 1, padding: '8px', background: '#FC4C02', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '0.85rem' }}>Save</button>
+                          <button onClick={() => setShowResultForm(false)} style={{ flex: 1, padding: '8px', background: 'transparent', color: '#94a3b8', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', cursor: 'pointer', fontSize: '0.85rem' }}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Delete — admin only */}
+                {isAdmin && (
+                  <button onClick={() => deleteEvent(selectedEvent.id)} style={{
+                    padding: '8px 14px', background: 'transparent', color: '#ef4444',
+                    border: '1px solid rgba(239,68,68,0.3)', borderRadius: '8px', cursor: 'pointer', fontSize: '0.8rem',
+                  }}>
+                    Delete event
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
       </div>
     </div>
